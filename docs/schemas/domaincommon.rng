@@ -3148,6 +3148,32 @@
       </optional>
     </element>
   </define>
+  <define name="memdev">
+    <element name="memdev">
+      <attribute name="type">
+        <choice>
+           <value>ram</value>
+           <value>file</value>
+        </choice>
+      </attribute>
+      <optional>
+        <attribute name='merge'>
+          <value>yes</value>
+        </attribute>
+      </optional>
+      <optional>
+        <attribute name='dump'>
+          <value>yes</value>
+        </attribute>
+      </optional>
+      <optional>
+        <attribute name='prealloc'>
+          <value>yes</value>
+        </attribute>
+      </optional>
+      <ref name="memorybackend"/>
+    </element>
+  </define>
   <define name="parallel">
     <element name="parallel">
       <ref name="qemucdev"/>
@@ -3671,6 +3697,7 @@
             <ref name="redirfilter"/>
             <ref name="rng"/>
             <ref name="tpm"/>
+            <ref name="memdev"/>
           </choice>
         </zeroOrMore>
         <optional>
@@ -3895,9 +3922,18 @@
       <attribute name="cpus">
         <ref name="cpuset"/>
       </attribute>
-      <attribute name="memory">
-        <ref name="memoryKB"/>
-      </attribute>
+      <choice>
+        <group>
+          <attribute name="memory">
+            <ref name="memoryKB"/>
+          </attribute>
+        </group>
+        <group>
+          <attribute name='memdev'>
+            <ref name='aliasName'/>
+          </attribute>
+        </group>
+      </choice>
     </element>
   </define>
 
@@ -4534,6 +4570,40 @@
       </attribute>
     </element>
     <empty/>
+  </define>
+  <define name='memorybackend'>
+    <element name='name'>
+      <ref name='aliasName'/>
+    </element>
+    <element name='capacity'>
+      <ref name='scaledInteger'/>
+    </element>
+    <optional>
+      <element name='source'>
+        <optional>
+          <attribute name='mem-path'>
+            <ref name='absFilePath'/>
+          </attribute>
+        </optional>
+        <optional>
+          <attribute name='host-nodes'>
+            <data type="string">
+              <param name='pattern'>[a-zA-Z0-9\-_]+</param>
+            </data>
+          </attribute>
+        </optional>
+        <optional>
+          <attribute name='policy'>
+            <choice>
+               <value>default</value>
+               <value>preferred</value>
+               <value>bind</value>
+               <value>interleave</value>
+             </choice>
+          </attribute>
+        </optional>
+      </element>
+    </optional>
   </define>
   <define name="ccwCssidRange">
     <choice>
