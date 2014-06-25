@@ -4594,6 +4594,71 @@ qemuBuildNVRAMDevStr(virDomainNVRAMDefPtr dev)
 }
 
 char *
+qemuBuildMemObjectStr(virDomainMemDevDefPtr dev,
+                      virQEMUCapsPtr qemuCaps)
+{
+    virBuffer buf = VIR_BUFFER_INITIALIZER;
+
+    switch (dev->type) {
+        case VIR_DOMAIN_MEMDEV_RAM:
+            if (!virQEMUCapsGet(qemuCaps, QEMU_CAPS_MEMORY_BACKEND_RAM)) {
+                virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
+                               _("The object memory-backend-ram "
+                                 "is not supported in this QEMU binary"));
+                goto error;
+            }
+            virBufferAddLit(&buf, "memory-backend-ram");
+            break;
+        case VIR_DOMAIN_MEMDEV_FILE:
+            if (!virQEMUCapsGet(qemuCaps, QEMU_CAPS_MEMORY_BACKEND_FILE)) {
+                virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
+                               _("The object memory-backend-file "
+                                 "is not supported in this QEMU binary"));
+                goto error;
+            }
+            virBufferAddLit(&buf, "memory-backend-file");
+            break;
+        default:
+            virReportError(VIR_ERR_XML_ERROR,
+                           _("memdev unsupported with type '%s'"),
+                           virDomainMemDevTypeToString(dev->type));
+            goto error;
+    }
+    virBufferAsprintf(&buf, ",id=%s", dev->name);
+    dev->capacity = VIR_DIV_UP(dev->capacity, 1024) * 1024;
+    virBufferAsprintf(&buf, ",size=%lluK", dev->capacity);
+
+    if (dev->merge)
+        virBufferAddLit(&buf, ",merge=yes");
+    if (dev->dump)
+        virBufferAddLit(&buf, ",dump=yes");
+    if (dev->prealloc)
+        virBufferAddLit(&buf, ",prealloc=yes");
+
+    if (dev->type == VIR_DOMAIN_MEMDEV_FILE && dev->mempath)
+        virBufferAsprintf(&buf, ",mem-path=%s", dev->mempath);
+
+    if (dev->hostnodes)
+        virBufferAsprintf(&buf, ",host-nodes=%s", dev->hostnodes);
+
+    if (dev->policy)
+        virBufferAsprintf(&buf, ",policy=%s",
+                          virDomainHostNodePolicyTypeToString(dev->policy));
+
+    if (virBufferError(&buf)) {
+        virReportOOMError();
+        goto error;
+    }
+
+    return virBufferContentAndReset(&buf);
+
+error:
+   virBufferFreeAndReset(&buf);
+   return NULL;
+}
+
+
+char *
 qemuBuildUSBInputDevStr(virDomainDefPtr def,
                         virDomainInputDefPtr dev,
                         virQEMUCapsPtr qemuCaps)
@@ -6411,9 +6476,13 @@ qemuBuildNumaArgStr(const virDomainDef *def, virCommandPtr cmd)
             goto cleanup;
         }
         virBufferAdd(&buf, cpumask, -1);
-        def->cpu->cells[i].mem = VIR_DIV_UP(def->cpu->cells[i].mem,
-                                            1024) * 1024;
-        virBufferAsprintf(&buf, ",mem=%d", def->cpu->cells[i].mem / 1024);
+        if (def->cpu->cells[i].memtype == VIR_CPU_CELL_MEMORY_DEV) {
+            virBufferAsprintf(&buf, ",memdev=%s", def->cpu->cells[i].data.memstr);
+        } else {
+            def->cpu->cells[i].data.mem = VIR_DIV_UP(def->cpu->cells[i].data.mem,
+                                                     1024) * 1024;
+            virBufferAsprintf(&buf, ",mem=%d", def->cpu->cells[i].data.mem / 1024);
+        }
 
         if (virBufferError(&buf)) {
             virReportOOMError();
@@ -7240,6 +7309,15 @@ qemuBuildCommandLine(virConnectPtr conn,
                                def->mem.locked ? "on" : "off");
     }
     mlock = def->mem.locked;
+
+   for (i = 0; i < def->nmemdevs; i++) {
+       char *objectstr;
+       virDomainMemDevDefPtr memptr = def->memdevs[i];
+
+       if (!(objectstr = qemuBuildMemObjectStr(memptr, qemuCaps)))
+           goto error;
+       virCommandAddArgList(cmd, "-object", objectstr, NULL);
+    }
 
     virCommandAddArg(cmd, "-smp");
     if (!(smp = qemuBuildSmpArgStr(def, qemuCaps)))

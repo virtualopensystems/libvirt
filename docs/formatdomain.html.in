@@ -1032,6 +1032,9 @@
     &lt;numa&gt;
       &lt;cell cpus='0-3' memory='512000'/&gt;
       &lt;cell cpus='4-7' memory='512000'/&gt;
+      &lt;!-- OR --&gt;
+      &lt;cell cpus='0-3' memdev='ram0'/&gt;
+      &lt;cell cpus='4-7' memdev='ram1'/&gt;
     &lt;/numa&gt;
     ...
   &lt;/cpu&gt;
@@ -1041,8 +1044,11 @@
       Each <code>cell</code> element specifies a NUMA cell or a NUMA node.
       <code>cpus</code> specifies the CPU or range of CPUs that are part of
       the node. <code>memory</code> specifies the node memory in kibibytes
-      (i.e. blocks of 1024 bytes). Each cell or node is assigned cellid
-      or nodeid in the increasing order starting from 0.
+      (i.e. blocks of 1024 bytes). <span class="since">Since 2.1</span>,
+      <code>memdev</code> specifies the Host NUMA node that the Guest NUMA
+      node bind to. if <code>memdev</code> specified for one node, it must
+      be specified for all nodes. Each cell or node is assigned cellid or
+      nodeid in the increasing order starting from 0.
     </p>
 
     <p>
@@ -5250,6 +5256,67 @@ qemu-kvm -net nic,model=? /dev/null
       </p>
     </dd>
   </dl>
+
+    <h4><a name="elementsMemdev">memory device</a></h4>
+    <p>
+      A memory device can be added to guest via memdev element.
+      <span class="since">Since 2.1, QEMU and KVM only</span>
+    </p>
+    <p>
+      Example: usage of memory device configuration
+    </p>
+<pre>
+  ...
+  &lt;devices&gt;
+    &lt;memdev type='ram' merge='yes' dump='yes' prealloc='yes'&gt;
+      &lt;name&gt;ram0&lt;/name&gt;
+      &lt;capacity unit='KiB'&gt;102400&lt;/capacity&gt;
+      &lt;source host-nodes='0-1' policy='bind'/&gt;
+    &lt;/memdev&gt;
+  &lt;/devices&gt;
+  ...
+</pre>
+  <dl>
+    <dt><code>type</code></dt>
+    <dd>
+      <p>
+        The required type attribute specifies what type of memory device
+        is provided. Valid type are:
+      </p>
+        <ul>
+          <li>'ram' &mdash; memory ram backend.</li>
+          <li>'file' &mdash; memory file backend.</li>
+        </ul>
+    </dd>
+    <dt><code>merge</code></dt>
+    <dd>
+      <p>
+        The optional merge attribute enables memory merge support.
+      </p>
+    </dd>
+    <dt><code>dump</code></dt>
+    <dd>
+      <p>
+        The optional dump attribute enables to dump memory device's memory in a
+        core dump file.
+      </p>
+    </dd>
+    <dt><code>prealloc</code></dt>
+    <dd>
+      <p>
+        The optional prealloc attribute enables memory preallocation.
+      </p>
+    </dd>
+     <dt><code>source</code></dt>
+      <dd>The source element describes the device as seen from the host.
+      the optional <code>mem-path</code> element is required when specified type = 'file'.
+      the optional <code>host-nodes</code> element specified the Host nodes ids that the
+      Guest memory device binds to. the optional <code>policy</code> element specified the
+      memory policy of memory device. the <code>policy</code> is either "default", "preferred",
+      "bind", "interleave". defaults to "default".
+      </dd>
+  </dl>
+
 
     <h3><a name="seclabel">Security label</a></h3>
 

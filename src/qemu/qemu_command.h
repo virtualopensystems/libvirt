@@ -270,4 +270,8 @@ qemuParseKeywords(const char *str,
 int qemuGetDriveSourceString(virStorageSourcePtr src,
                              virConnectPtr conn,
                              char **source);
+
+char *
+qemuBuildMemObjectStr(virDomainMemDevDefPtr dev,
+                      virQEMUCapsPtr qemuCaps);
 #endif /* __QEMU_COMMAND_H__*/

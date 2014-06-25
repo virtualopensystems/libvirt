@@ -90,13 +90,24 @@ struct _virCPUFeatureDef {
     int policy;         /* enum virCPUFeaturePolicy */
 };
 
+typedef enum {
+    VIR_CPU_CELL_MEMORY_SIZE,
+    VIR_CPU_CELL_MEMORY_DEV,
+
+    VIR_CPU_CELL_MEMORY_LAST
+} virCPUCellMemoryType;
+
 typedef struct _virCellDef virCellDef;
 typedef virCellDef *virCellDefPtr;
 struct _virCellDef {
    int cellid;
    virBitmapPtr cpumask;	/* CPUs that are part of this node */
    char *cpustr;	/* CPUs stored in string form for dumpxml */
-   unsigned int mem;	/* Node memory in kB */
+   int memtype;
+   union {
+       char *memstr;        /* Node memory device name */
+       unsigned int mem;    /* Node memory in kB */
+   } data;
 };
 
 typedef struct _virCPUDef virCPUDef;
