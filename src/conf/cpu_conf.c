@@ -29,6 +29,7 @@
 #include "cpu_conf.h"
 #include "domain_conf.h"
 #include "virstring.h"
+#include "c-ctype.h"
 
 #define VIR_FROM_THIS VIR_FROM_CPU
 
@@ -84,6 +85,8 @@ virCPUDefFree(virCPUDefPtr def)
     for (i = 0; i < def->ncells; i++) {
         virBitmapFree(def->cells[i].cpumask);
         VIR_FREE(def->cells[i].cpustr);
+        if (def->cells[i].memtype == VIR_CPU_CELL_MEMORY_DEV)
+            VIR_FREE(def->cells[i].data.memstr);
     }
     VIR_FREE(def->cells);
     VIR_FREE(def->vendor_id);
@@ -153,7 +156,13 @@ virCPUDefCopy(const virCPUDef *cpu)
 
         for (i = 0; i < cpu->ncells; i++) {
             copy->cells[i].cellid = cpu->cells[i].cellid;
-            copy->cells[i].mem = cpu->cells[i].mem;
+            copy->cells[i].memtype = cpu->cells[i].memtype;
+            if (cpu->cells[i].memtype == VIR_CPU_CELL_MEMORY_DEV) {
+                if (VIR_STRDUP(copy->cells[i].data.memstr, cpu->cells[i].data.memstr) < 0)
+                    goto error;
+            } else {
+                copy->cells[i].data.mem = cpu->cells[i].data.mem;
+            }
 
             copy->cells[i].cpumask = virBitmapNewCopy(cpu->cells[i].cpumask);
 
@@ -436,7 +445,7 @@ virCPUDefParseXML(xmlNodePtr node,
         def->ncells = n;
 
         for (i = 0; i < n; i++) {
-            char *cpus, *memory;
+            char *cpus, *memory, *memdev;
             int ret, ncpus = 0;
 
             def->cells[i].cellid = i;
@@ -455,20 +464,52 @@ virCPUDefParseXML(xmlNodePtr node,
             def->cells_cpus += ncpus;
 
             memory = virXMLPropString(nodes[i], "memory");
-            if (!memory) {
-                virReportError(VIR_ERR_XML_ERROR, "%s",
-                               _("Missing 'memory' attribute in NUMA cell"));
-                goto error;
-            }
+            memdev = virXMLPropString(nodes[i], "memdev");
+            if (memory || memdev) {
+                if (memory && memdev) {
+                    virReportError(VIR_ERR_XML_ERROR, "%s",
+                                   _("Both 'memory' and 'memdev' attribute in NUMA cell is not allowed"));
+                    goto error;
+                }
 
-            ret  = virStrToLong_ui(memory, NULL, 10, &def->cells[i].mem);
-            if (ret == -1) {
+                if (memory) {
+                    ret  = virStrToLong_ui(memory, NULL, 10, &def->cells[i].data.mem);
+                    if (ret == -1) {
+                        virReportError(VIR_ERR_XML_ERROR, "%s",
+                                       _("Invalid 'memory' attribute in NUMA cell"));
+                        VIR_FREE(memory);
+                        goto error;
+                    }
+                    def->cells[i].memtype = VIR_CPU_CELL_MEMORY_SIZE;
+                    VIR_FREE(memory);
+                } else {
+                    if (strlen(memdev) < 1) {
+                        virReportError(VIR_ERR_XML_ERROR, "%s",
+                                       _("Empty 'memdev' attribute in NUMA cell"));
+                        VIR_FREE(memdev);
+                        goto error;
+                    }
+
+                    if (!c_isalpha(memdev[0])) {
+                        virReportError(VIR_ERR_XML_ERROR, "%s",
+                                       _("Invalid 'memdev' attribute name in NUMA cell, "
+                                         "it must begin with a letter"));
+                        VIR_FREE(memdev);
+                        goto error;
+                    }
+
+                    if (VIR_STRDUP(def->cells[i].data.memstr, memdev) < 0) {
+                        VIR_FREE(memdev);
+                        goto error;
+                    }
+                    def->cells[i].memtype = VIR_CPU_CELL_MEMORY_DEV;
+                    VIR_FREE(memdev);
+                }
+            } else {
                 virReportError(VIR_ERR_XML_ERROR, "%s",
-                               _("Invalid 'memory' attribute in NUMA cell"));
-                VIR_FREE(memory);
+                               _("Missing 'memory' or 'memdev' attribute in NUMA cell"));
                 goto error;
             }
-            VIR_FREE(memory);
         }
     }
 
@@ -648,7 +689,11 @@ virCPUDefFormatBuf(virBufferPtr buf,
         for (i = 0; i < def->ncells; i++) {
             virBufferAddLit(buf, "<cell");
             virBufferAsprintf(buf, " cpus='%s'", def->cells[i].cpustr);
-            virBufferAsprintf(buf, " memory='%d'", def->cells[i].mem);
+            if (def->cells[i].memtype == VIR_CPU_CELL_MEMORY_DEV) {
+                virBufferAsprintf(buf, " memdev='%s'", def->cells[i].data.memstr);
+            } else {
+                virBufferAsprintf(buf, " memory='%d'", def->cells[i].data.mem);
+            }
             virBufferAddLit(buf, "/>\n");
         }
         virBufferAdjustIndent(buf, -2);

@@ -204,7 +204,8 @@ VIR_ENUM_IMPL(virDomainDevice, VIR_DOMAIN_DEVICE_LAST,
               "chr",
               "memballoon",
               "nvram",
-              "rng")
+              "rng",
+              "memdev")
 
 VIR_ENUM_IMPL(virDomainDeviceAddress, VIR_DOMAIN_DEVICE_ADDRESS_TYPE_LAST,
               "none",
@@ -453,6 +454,16 @@ VIR_ENUM_IMPL(virDomainMemballoonModel, VIR_DOMAIN_MEMBALLOON_MODEL_LAST,
               "virtio",
               "xen",
               "none")
+
+VIR_ENUM_IMPL(virDomainMemDev, VIR_DOMAIN_MEMDEV_LAST,
+              "ram",
+              "file")
+
+VIR_ENUM_IMPL(virDomainHostNodePolicy, VIR_DOMAIN_HOST_NODE_POLICY_LAST,
+              "default",
+              "preferred",
+              "bind",
+              "interleave")
 
 VIR_ENUM_IMPL(virDomainSmbiosMode, VIR_DOMAIN_SMBIOS_LAST,
               "none",
@@ -769,6 +780,10 @@ static virClassPtr virDomainXMLOptionClass;
 static void virDomainObjDispose(void *obj);
 static void virDomainObjListDispose(void *obj);
 static void virDomainXMLOptionClassDispose(void *obj);
+
+static int
+virDomainParseMemory(const char *xpath, xmlXPathContextPtr ctxt,
+                     unsigned long long *mem, bool required);
 
 static int virDomainObjOnceInit(void)
 {
@@ -1661,6 +1676,18 @@ void virDomainMemballoonDefFree(virDomainMemballoonDefPtr def)
     VIR_FREE(def);
 }
 
+void virDomainMemDevDefFree(virDomainMemDevDefPtr def)
+{
+    if (!def)
+        return;
+
+    VIR_FREE(def->name);
+    VIR_FREE(def->mempath);
+    VIR_FREE(def->hostnodes);
+    VIR_FREE(def);
+}
+
+
 void virDomainNVRAMDefFree(virDomainNVRAMDefPtr def)
 {
     if (!def)
@@ -1863,6 +1890,9 @@ void virDomainDeviceDefFree(virDomainDeviceDefPtr def)
         break;
     case VIR_DOMAIN_DEVICE_NVRAM:
         virDomainNVRAMDefFree(def->data.nvram);
+        break;
+    case VIR_DOMAIN_DEVICE_MEMDEV:
+        virDomainMemDevDefFree(def->data.memdev);
         break;
     case VIR_DOMAIN_DEVICE_LAST:
     case VIR_DOMAIN_DEVICE_NONE:
@@ -2543,6 +2573,7 @@ virDomainDeviceGetInfo(virDomainDeviceDefPtr device)
     /* The following devices do not contain virDomainDeviceInfo */
     case VIR_DOMAIN_DEVICE_LEASE:
     case VIR_DOMAIN_DEVICE_GRAPHICS:
+    case VIR_DOMAIN_DEVICE_MEMDEV:
     case VIR_DOMAIN_DEVICE_LAST:
     case VIR_DOMAIN_DEVICE_NONE:
         break;
@@ -2780,6 +2811,7 @@ virDomainDeviceInfoIterateInternal(virDomainDefPtr def,
     case VIR_DOMAIN_DEVICE_NVRAM:
     case VIR_DOMAIN_DEVICE_LAST:
     case VIR_DOMAIN_DEVICE_RNG:
+    case VIR_DOMAIN_DEVICE_MEMDEV:
         break;
     }
 
@@ -9192,6 +9224,104 @@ virDomainMemballoonDefParseXML(xmlNodePtr node,
     goto cleanup;
 }
 
+static virDomainMemDevDefPtr
+virDomainMemDevDefParseXML(xmlNodePtr node,
+                           xmlXPathContextPtr ctxt)
+{
+    char *type;
+    virDomainMemDevDefPtr def;
+    xmlNodePtr save = ctxt->node;
+    char *tmp = NULL;
+    char *policy = NULL;
+
+    if (VIR_ALLOC(def) < 0)
+        return NULL;
+
+    type = virXMLPropString(node, "type");
+    if (type == NULL) {
+        virReportError(VIR_ERR_XML_ERROR, "%s",
+                       _("memory device must contain a type name"));
+        goto error;
+    }
+
+    if ((def->type = virDomainMemDevTypeFromString(type)) < 0) {
+        virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
+                       _("unknown memory device type '%s'"), type);
+        goto error;
+    }
+
+    if ((tmp = virXMLPropString(node, "merge")) != NULL) {
+        if (STREQ(tmp, "yes"))
+            def->merge = true;
+        VIR_FREE(tmp);
+    }
+
+    if ((tmp = virXMLPropString(node, "dump")) != NULL) {
+        if (STREQ(tmp, "yes"))
+            def->dump = true;
+        VIR_FREE(tmp);
+    }
+
+    if ((tmp = virXMLPropString(node, "prealloc")) != NULL) {
+        if (STREQ(tmp, "yes"))
+            def->prealloc = true;
+        VIR_FREE(tmp);
+    }
+
+    ctxt->node = node;
+
+    def->name = virXPathString("string(./name)", ctxt);
+    if (!def->name) {
+        virReportError(VIR_ERR_XML_ERROR, "%s",
+                       _("Missing memory device name element"));
+        goto error;
+    }
+
+    /* Extract memory capacity */
+    if (virDomainParseMemory("./capacity", ctxt,
+                             &def->capacity, true) < 0)
+        goto error;
+
+    def->mempath = virXPathString("string(./source/@mem-path)", ctxt);
+    if (def->type == VIR_DOMAIN_MEMDEV_FILE && !def->mempath) {
+        virReportError(VIR_ERR_XML_ERROR, "%s",
+                       _("The mem-path element must be specified when "
+                         "memory device type is 'file'"));
+        goto error;
+    }
+
+    if (def->type == VIR_DOMAIN_MEMDEV_RAM && def->mempath) {
+        virReportError(VIR_ERR_XML_ERROR, "%s",
+                       _("The mem-path element should be not specified when "
+                         "memory device type is 'ram'"));
+        goto error;
+    }
+
+    def->hostnodes = virXPathString("string(./source/@host-nodes)", ctxt);
+
+    policy = virXPathString("string(./source/@policy)", ctxt);
+    if (policy != NULL) {
+        if ((def->policy = virDomainHostNodePolicyTypeFromString(policy)) < 0) {
+            virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
+                           _("unknown host node policy: '%s'"), policy);
+            goto error;
+        }
+    }
+
+cleanup:
+    VIR_FREE(type);
+    VIR_FREE(policy);
+    ctxt->node = save;
+
+    return def;
+
+ error:
+    virDomainMemDevDefFree(def);
+    def = NULL;
+    goto cleanup;
+}
+
+
 static virDomainNVRAMDefPtr
 virDomainNVRAMDefParseXML(xmlNodePtr node,
                           unsigned int flags)
@@ -10065,6 +10195,10 @@ virDomainDeviceDefParse(const char *xmlStr,
         break;
     case VIR_DOMAIN_DEVICE_NVRAM:
         if (!(dev->data.nvram = virDomainNVRAMDefParseXML(node, flags)))
+            goto error;
+        break;
+    case VIR_DOMAIN_DEVICE_MEMDEV:
+        if (!(dev->data.memdev = virDomainMemDevDefParseXML(node, ctxt)))
             goto error;
         break;
     case VIR_DOMAIN_DEVICE_NONE:
@@ -12751,6 +12885,24 @@ virDomainDefParseXML(xmlDocPtr xml,
         VIR_FREE(nodes);
     }
     VIR_FREE(nodes);
+
+    /* analysis of the memory devices */
+    if ((n = virXPathNodeSet("./devices/memdev", ctxt, &nodes)) < 0) {
+        goto error;
+    }
+
+    if (n && VIR_ALLOC_N(def->memdevs, n) < 0)
+        goto error;
+
+     for (i = 0; i < n; i++) {
+         virDomainMemDevDefPtr memdev = virDomainMemDevDefParseXML(nodes[i], ctxt);
+         if (!memdev)
+             goto error;
+
+         def->memdevs[def->nmemdevs++] = memdev;
+     }
+     VIR_FREE(nodes);
+
 
     /* Parse the TPM devices */
     if ((n = virXPathNodeSet("./devices/tpm", ctxt, &nodes)) < 0)
@@ -16269,6 +16421,50 @@ virDomainTPMDefFormat(virBufferPtr buf,
     return 0;
 }
 
+static int
+virDomainMemDevDefFormat(virBufferPtr buf,
+                         virDomainMemDevDefPtr def)
+{
+    const char *type = virDomainMemDevTypeToString(def->type);
+
+    if (!type) {
+        virReportError(VIR_ERR_INTERNAL_ERROR,
+                       _("unexpected memdev type %d"), def->type);
+        return -1;
+    }
+
+    virBufferAsprintf(buf, "<memdev type='%s'", type);
+    if (def->merge)
+        virBufferAddLit(buf, " merge='yes'");
+    if (def->dump)
+        virBufferAddLit(buf, " dump='yes'");
+    if (def->prealloc)
+        virBufferAddLit(buf, " prealloc='yes'");
+    virBufferAddLit(buf, ">\n");
+
+    virBufferAdjustIndent(buf, 2);
+
+    virBufferAsprintf(buf, "<name>%s</name>\n", def->name);
+    virBufferAsprintf(buf, "<capacity unit='KiB'>%llu</capacity>\n",
+                      def->capacity);
+
+    if (def->type == VIR_DOMAIN_MEMDEV_FILE || def->hostnodes || def->policy) {
+        virBufferAddLit(buf, "<source");
+        if (def->type == VIR_DOMAIN_MEMDEV_FILE)
+            virBufferAsprintf(buf, " mem-path='%s'", def->mempath);
+        if (def->hostnodes)
+            virBufferAsprintf(buf, " host-nodes='%s'", def->hostnodes);
+        if (def->policy)
+            virBufferAsprintf(buf, " policy='%s'",
+                              virDomainHostNodePolicyTypeToString(def->policy));
+        virBufferAddLit(buf, "/>\n");
+    }
+
+    virBufferAdjustIndent(buf, -2);
+    virBufferAddLit(buf, "</memdev>\n");
+
+    return 0;
+}
 
 static int
 virDomainSoundDefFormat(virBufferPtr buf,
@@ -17923,6 +18119,10 @@ virDomainDefFormatInternal(virDomainDefPtr def,
     if (def->memballoon)
         virDomainMemballoonDefFormat(buf, def->memballoon, flags);
 
+    for (n = 0; n < def->nmemdevs; n++)
+        if (virDomainMemDevDefFormat(buf, def->memdevs[n]) < 0)
+           goto error;
+
     if (def->rng)
         virDomainRNGDefFormat(buf, def->rng, flags);
 
@@ -19298,6 +19498,7 @@ virDomainDeviceDefCopy(virDomainDeviceDefPtr src,
     case VIR_DOMAIN_DEVICE_NONE:
     case VIR_DOMAIN_DEVICE_SMARTCARD:
     case VIR_DOMAIN_DEVICE_MEMBALLOON:
+    case VIR_DOMAIN_DEVICE_MEMDEV:
     case VIR_DOMAIN_DEVICE_NVRAM:
     case VIR_DOMAIN_DEVICE_LAST:
         virReportError(VIR_ERR_INTERNAL_ERROR,

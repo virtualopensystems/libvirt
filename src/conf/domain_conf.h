@@ -109,6 +109,9 @@ typedef virDomainChrDef *virDomainChrDefPtr;
 typedef struct _virDomainMemballoonDef virDomainMemballoonDef;
 typedef virDomainMemballoonDef *virDomainMemballoonDefPtr;
 
+typedef struct _virDomainMemDevDef virDomainMemDevDef;
+typedef virDomainMemDevDef *virDomainMemDevDefPtr;
+
 typedef struct _virDomainNVRAMDef virDomainNVRAMDef;
 typedef virDomainNVRAMDef *virDomainNVRAMDefPtr;
 
@@ -151,6 +154,7 @@ typedef enum {
     VIR_DOMAIN_DEVICE_MEMBALLOON,
     VIR_DOMAIN_DEVICE_NVRAM,
     VIR_DOMAIN_DEVICE_RNG,
+    VIR_DOMAIN_DEVICE_MEMDEV,
 
     VIR_DOMAIN_DEVICE_LAST
 } virDomainDeviceType;
@@ -178,6 +182,7 @@ struct _virDomainDeviceDef {
         virDomainMemballoonDefPtr memballoon;
         virDomainNVRAMDefPtr nvram;
         virDomainRNGDefPtr rng;
+        virDomainMemDevDefPtr memdev;
     } data;
 };
 
@@ -1490,6 +1495,37 @@ struct _virDomainNVRAMDef {
     virDomainDeviceInfo info;
 };
 
+enum {
+    VIR_DOMAIN_MEMDEV_RAM,
+    VIR_DOMAIN_MEMDEV_FILE,
+
+    VIR_DOMAIN_MEMDEV_LAST
+};
+
+struct _virDomainMemDevDef {
+    char *name;
+    int type;
+
+    unsigned long long capacity; /* bytes */
+
+    bool merge;
+    bool dump;
+    bool prealloc;
+
+    char *mempath;
+    char *hostnodes;
+    int policy;
+};
+
+enum {
+    VIR_DOMAIN_HOST_NODE_POLICY_DEFAULT = 0,
+    VIR_DOMAIN_HOST_NODE_POLICY_PREFERRED,
+    VIR_DOMAIN_HOST_NODE_POLICY_BIND,
+    VIR_DOMAIN_HOST_NODE_POLICY_INTERLEAVE,
+
+    VIR_DOMAIN_HOST_NODE_POLICY_LAST
+};
+
 typedef enum {
     VIR_DOMAIN_SMBIOS_NONE = 0,
     VIR_DOMAIN_SMBIOS_EMULATE,
@@ -1973,6 +2009,9 @@ struct _virDomainDef {
     size_t nseclabels;
     virSecurityLabelDefPtr *seclabels;
 
+    size_t nmemdevs;
+    virDomainMemDevDefPtr *memdevs;
+
     /* Only 1 */
     virDomainWatchdogDefPtr watchdog;
     virDomainMemballoonDefPtr memballoon;
@@ -2162,6 +2201,7 @@ int virDomainChrSourceDefCopy(virDomainChrSourceDefPtr src,
 void virDomainSoundCodecDefFree(virDomainSoundCodecDefPtr def);
 void virDomainSoundDefFree(virDomainSoundDefPtr def);
 void virDomainMemballoonDefFree(virDomainMemballoonDefPtr def);
+void virDomainMemDevDefFree(virDomainMemDevDefPtr def);
 void virDomainNVRAMDefFree(virDomainNVRAMDefPtr def);
 void virDomainWatchdogDefFree(virDomainWatchdogDefPtr def);
 void virDomainVideoDefFree(virDomainVideoDefPtr def);
@@ -2575,6 +2615,8 @@ VIR_ENUM_DECL(virDomainSoundCodec)
 VIR_ENUM_DECL(virDomainSoundModel)
 VIR_ENUM_DECL(virDomainMemDump)
 VIR_ENUM_DECL(virDomainMemballoonModel)
+VIR_ENUM_DECL(virDomainMemDev)
+VIR_ENUM_DECL(virDomainHostNodePolicy)
 VIR_ENUM_DECL(virDomainSmbiosMode)
 VIR_ENUM_DECL(virDomainWatchdogModel)
 VIR_ENUM_DECL(virDomainWatchdogAction)

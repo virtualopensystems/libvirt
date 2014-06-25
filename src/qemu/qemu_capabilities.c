@@ -256,6 +256,8 @@ VIR_ENUM_IMPL(virQEMUCaps, QEMU_CAPS_LAST,
               "usb-kbd", /* 165 */
               "host-pci-multidomain",
               "msg-timestamp",
+              "memory-backend-ram",
+              "memory-backend-file",
     );
 
 
@@ -1467,6 +1469,8 @@ struct virQEMUCapsStringFlags virQEMUCapsObjectTypes[] = {
     { "ich9-intel-hda", QEMU_CAPS_DEVICE_ICH9_INTEL_HDA },
     { "pvpanic", QEMU_CAPS_DEVICE_PANIC },
     { "usb-kbd", QEMU_CAPS_DEVICE_USB_KBD },
+    { "memory-backend-ram", QEMU_CAPS_MEMORY_BACKEND_RAM },
+    { "memory-backend-file", QEMU_CAPS_MEMORY_BACKEND_FILE },
 };
 
 static struct virQEMUCapsStringFlags virQEMUCapsObjectPropsVirtioBlk[] = {
