@@ -6958,6 +6958,7 @@ qemuBuildVhostuserCommandLine(virCommandPtr cmd,
     virCommandAddArgList(cmd, "-netdev", virBufferContentAndReset(&buf2),
                          NULL);
 
+    strcpy(net->model, "virtio");
     if (!(nic = qemuBuildNicDevStr(def, net, -1, 0, 0, qemuCaps))) {
         virReportError(VIR_ERR_INTERNAL_ERROR,
                        "%s", _("Error generating NIC -device string"));
