@@ -1508,6 +1508,7 @@ struct _virDomainMemDevDef {
 
     unsigned long long capacity; /* bytes */
 
+    bool share;
     bool merge;
     bool dump;
     bool prealloc;
