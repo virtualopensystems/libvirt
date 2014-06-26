@@ -9250,6 +9250,13 @@ virDomainMemDevDefParseXML(xmlNodePtr node,
         goto error;
     }
 
+
+    if ((tmp = virXMLPropString(node, "share")) != NULL) {
+        if (STREQ(tmp, "on"))
+            def->share = true;
+        VIR_FREE(tmp);
+    }
+
     if ((tmp = virXMLPropString(node, "merge")) != NULL) {
         if (STREQ(tmp, "yes"))
             def->merge = true;
@@ -9293,6 +9300,13 @@ virDomainMemDevDefParseXML(xmlNodePtr node,
     if (def->type == VIR_DOMAIN_MEMDEV_RAM && def->mempath) {
         virReportError(VIR_ERR_XML_ERROR, "%s",
                        _("The mem-path element should be not specified when "
+                         "memory device type is 'ram'"));
+        goto error;
+    }
+
+    if (def->type == VIR_DOMAIN_MEMDEV_RAM && def->share) {
+        virReportError(VIR_ERR_XML_ERROR, "%s",
+                       _("The share argument should be not specified when "
                          "memory device type is 'ram'"));
         goto error;
     }
@@ -16436,6 +16450,8 @@ virDomainMemDevDefFormat(virBufferPtr buf,
     }
 
     virBufferAsprintf(buf, "<memdev type='%s'", type);
+    if (def->type == VIR_DOMAIN_MEMDEV_FILE && def->share)
+        virBufferAddLit(buf, " share='on'");
     if (def->merge)
         virBufferAddLit(buf, " merge='yes'");
     if (def->dump)

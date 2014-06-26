@@ -4638,6 +4638,9 @@ qemuBuildMemObjectStr(virDomainMemDevDefPtr dev,
     if (dev->type == VIR_DOMAIN_MEMDEV_FILE && dev->mempath)
         virBufferAsprintf(&buf, ",mem-path=%s", dev->mempath);
 
+    if (dev->type == VIR_DOMAIN_MEMDEV_FILE && dev->share)
+        virBufferAsprintf(&buf, ",share=on");
+
     if (dev->hostnodes)
         virBufferAsprintf(&buf, ",host-nodes=%s", dev->hostnodes);
 
