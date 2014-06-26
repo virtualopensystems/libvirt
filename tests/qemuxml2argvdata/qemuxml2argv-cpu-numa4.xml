@@ -21,7 +21,7 @@
   <on_crash>destroy</on_crash>
   <devices>
     <emulator>/usr/bin/qemu</emulator>
-    <memdev type='file' merge='yes' dump='yes' prealloc='yes'>
+    <memdev type='file' share='on' merge='yes' dump='yes' prealloc='yes'>
       <name>ram0</name>
       <capacity unit='KiB'>109550</capacity>
       <source mem-path='/hugepages' host-nodes='0' policy='bind'/>

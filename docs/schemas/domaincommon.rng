@@ -3157,6 +3157,9 @@
         </choice>
       </attribute>
       <optional>
+        <attribute name='share'>
+          <value>on</value>
+        </attribute>
         <attribute name='merge'>
           <value>yes</value>
         </attribute>
