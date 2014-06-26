@@ -6920,6 +6920,62 @@ qemuBuildGraphicsCommandLine(virQEMUDriverConfigPtr cfg,
 }
 
 static int
+qemuBuildVhostuserCommandLine(virCommandPtr cmd,
+                              virDomainDefPtr def,
+                              virDomainNetDefPtr net,
+                              virQEMUCapsPtr qemuCaps)
+{
+    virBuffer buf1 = VIR_BUFFER_INITIALIZER;
+    virBuffer buf2 = VIR_BUFFER_INITIALIZER;
+
+    char* nic = NULL;
+
+    if (!qemuDomainSupportsNetdev(def, qemuCaps, net)) {
+        virReportError(VIR_ERR_INTERNAL_ERROR,
+                       "%s", _("Netdev support unavailable"));
+        goto error;
+    }
+
+    if (!qemuDomainSupportsNicdev(def, qemuCaps, net)) {
+        virReportError(VIR_ERR_INTERNAL_ERROR,
+                       "%s", _("Nicdev support unavailable"));
+        goto error;
+    }
+
+    virBufferAsprintf(&buf1, "socket,id=char%s,path=%s%s",
+	      net->info.alias, net->data.vhostuser.socket,
+	      STRCASEEQ(net->data.vhostuser.mode, "server") ? ",server" : "");
+    virBufferAsprintf(&buf2, "type=vhost-user,id=host%s,chardev=char%s",
+                      net->info.alias, net->info.alias);
+
+    if (virBufferError(&buf1) || virBufferError(&buf2)) {
+        virReportOOMError();
+        goto error;
+    }
+
+    virCommandAddArgList(cmd, "-chardev", virBufferContentAndReset(&buf1),
+                         NULL);
+    virCommandAddArgList(cmd, "-netdev", virBufferContentAndReset(&buf2),
+                         NULL);
+
+    if (!(nic = qemuBuildNicDevStr(def, net, -1, 0, 0, qemuCaps))) {
+        virReportError(VIR_ERR_INTERNAL_ERROR,
+                       "%s", _("Error generating NIC -device string"));
+        goto error;
+    }
+
+    virCommandAddArgList(cmd, "-device", nic, NULL);
+
+    return 0;
+
+error:
+    virBufferFreeAndReset(&buf1);
+    virBufferFreeAndReset(&buf2);
+
+    return -1;
+}
+
+static int
 qemuBuildInterfaceCommandLine(virCommandPtr cmd,
                               virQEMUDriverPtr driver,
                               virConnectPtr conn,
@@ -6941,6 +6997,10 @@ qemuBuildInterfaceCommandLine(virCommandPtr cmd,
     char **vhostfdName = NULL;
     int actualType = virDomainNetGetActualType(net);
     size_t i;
+
+    if (actualType == VIR_DOMAIN_NET_TYPE_VHOSTUSER) {
+        return qemuBuildVhostuserCommandLine(cmd, def, net, qemuCaps);
+    }
 
     if (actualType == VIR_DOMAIN_NET_TYPE_HOSTDEV) {
         /* NET_TYPE_HOSTDEV devices are really hostdev devices, so
@@ -7287,8 +7347,10 @@ qemuBuildCommandLine(virConnectPtr conn,
                            def->emulator);
             goto error;
         }
-        virCommandAddArgList(cmd, "-mem-prealloc", "-mem-path",
-                             cfg->hugepagePath, NULL);
+        virCommandAddArg(cmd, "-mem-path");
+        virCommandAddArgFormat(cmd, "%s,prealloc=on,share=%s",
+                               cfg->hugepagePath,
+                               def->mem.nosharepages ? "off" : "on");
     }
 
     if (def->mem.locked && !virQEMUCapsGet(qemuCaps, QEMU_CAPS_MLOCK)) {

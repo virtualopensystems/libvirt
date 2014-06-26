@@ -1966,6 +1966,29 @@
             <ref name="interface-options"/>
           </interleave>
         </group>
+        <!-- vhostuser interface: specify unix socket path, socket mode -->
+        <group>
+          <attribute name="type">
+            <value>vhostuser</value>
+          </attribute>
+          <interleave>
+            <optional>
+              <element name="socket">
+                <attribute name="path">
+                  <ref name="absFilePath"/>
+                </attribute>
+                <attribute name="mode">
+                  <choice>
+                    <value>server</value>
+                    <value>client</value>
+                  </choice>
+                </attribute>
+                <empty/>
+              </element>
+            </optional>
+            <ref name="interface-options"/>
+          </interleave>
+        </group>
         <group>
           <attribute name="type">
             <value>network</value>

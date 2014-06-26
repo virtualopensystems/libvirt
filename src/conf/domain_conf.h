@@ -795,6 +795,7 @@ struct _virDomainFSDef {
 typedef enum {
     VIR_DOMAIN_NET_TYPE_USER,
     VIR_DOMAIN_NET_TYPE_ETHERNET,
+    VIR_DOMAIN_NET_TYPE_VHOSTUSER,
     VIR_DOMAIN_NET_TYPE_SERVER,
     VIR_DOMAIN_NET_TYPE_CLIENT,
     VIR_DOMAIN_NET_TYPE_MCAST,
@@ -880,6 +881,10 @@ struct _virDomainNetDef {
             char *dev;
             char *ipaddr;
         } ethernet;
+        struct {
+            char *socket;
+            char *mode;
+        } vhostuser;
         struct {
             char *address;
             int port;
