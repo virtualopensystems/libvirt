@@ -5307,6 +5307,13 @@ qemu-kvm -net nic,model=? /dev/null
         The optional prealloc attribute enables memory preallocation.
       </p>
     </dd>
+    <dt><code>share</code></dt>
+    <dd>
+      <p>
+        The optional share attribute enables sharing option when the backend is
+        memory-backed-file(type = 'file').
+      </p>
+    </dd>
      <dt><code>source</code></dt>
       <dd>The source element describes the device as seen from the host.
       the optional <code>mem-path</code> element is required when specified type = 'file'.
