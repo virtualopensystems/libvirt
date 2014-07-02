@@ -1,0 +1,44 @@
+<domain type='kvm'>
+  <name>snabbguest</name>
+  <memory unit='MiB'>256</memory>
+  <currentMemory unit='MiB'>256</currentMemory>
+  <vcpu placement='static'>1</vcpu>
+  <cpu>
+    <numa>
+      <cell cpus='0' memdev='ram0'/>
+    </numa>
+  </cpu>
+  <os>
+    <type machine='pc'>hvm</type>
+    <boot dev='hd'/>
+    <kernel>/path/bzImage</kernel>
+    <cmdline>earlyprintk console=ttyS0 rw root=/dev/vda</cmdline>
+  </os>
+  <clock offset='utc'/>
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>destroy</on_crash>
+  <devices>
+    <emulator>/path/qemu-system-x86_64</emulator>
+    <disk type='file' device='disk'>
+      <source file='/path/disk.img'/>
+      <target dev='vda' bus='virtio'/>
+    </disk>
+    <serial type="pty">
+      <target port="0"/>
+    </serial>
+    <console type="pty">
+      <target type="serial" port="0"/>
+    </console>
+    <memdev type='file' merge='yes' dump='yes' prealloc='yes' share='on'>
+      <name>ram0</name>
+      <source mem-path='/hugetlbfs'/>
+      <capacity unit='MiB'>256</capacity>
+    </memdev>
+    <interface type='vhostuser'>
+      <source type='unix' path='/tmp/vhost.sock' mode='server'/>
+      <mac address='52:54:00:3b:83:aa'/>
+      <model type='virtio'/>
+    </interface>
+  </devices>
+</domain>
