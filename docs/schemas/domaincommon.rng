@@ -1968,6 +1968,45 @@
         </group>
         <group>
           <attribute name="type">
+            <value>vhostuser</value>
+          </attribute>
+          <interleave>
+            <optional>
+              <element name="source">
+                <attribute name="type">
+                  <choice>
+                    <value>null</value>
+                    <value>vc</value>
+                    <value>pty</value>
+                    <value>dev</value>
+                    <value>file</value>
+                    <value>pipe</value>
+                    <value>stdio</value>
+                    <value>udp</value>
+                    <value>tcp</value>
+                    <value>unix</value>
+                    <value>spicevmc</value>
+                    <value>spiceport</value>
+                    <value>nmdm</value>
+                  </choice>
+                </attribute>
+                <attribute name="path">
+                  <ref name="absFilePath"/>
+                </attribute>
+                <attribute name="mode">
+                  <choice>
+                    <value>server</value>
+                    <value>client</value>
+                  </choice>
+                </attribute>
+                <empty/>
+              </element>
+            </optional>
+            <ref name="interface-options"/>
+          </interleave>
+        </group>
+        <group>
+          <attribute name="type">
             <value>network</value>
           </attribute>
           <interleave>
